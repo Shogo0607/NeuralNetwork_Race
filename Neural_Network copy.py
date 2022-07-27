@@ -14,16 +14,15 @@ from tensorflow.keras.models import load_model
 import zipfile
 import tempfile
 import os
-from sklearn.utils import resample
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+
+
 st.set_page_config(page_title="Neural Network")
 
-def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
-    time.sleep(0.3)
+def make_model(X_train, y_train,X_valid, y_valid):
+    # keras.initializers.Initializer()
     model = keras.Sequential([
-        layers.Dense(25, activation='relu', input_shape=[len(X_train.columns)]),
-        # layers.Dense(64, activation='relu'),
+        layers.Dense(64, activation='relu', input_shape=[len(X_train.columns)]),
+        layers.Dense(64, activation='relu'),
         layers.Dense(1)
     ])
     
@@ -34,16 +33,14 @@ def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
                     metrics=['mae', 'mse'])
     EPOCHS = 10
     model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=0)
-    y_pred = model.predict(X_valid)
-    model_name = "model_"+str(n)
-    model.save(model_name)
-    zip_model(zip_f,model_name)
-    return y_pred
+    return model
     
-def zip_model(zip_f,model_name):
+def zip_model(model):
+    model.save("my_model")
+    zip_f = zipfile.ZipFile('./model.zip','w')
     # ZIPファイルに追加
-    zip_f.write(model_name, compress_type=zipfile.ZIP_DEFLATED)
-    
+    zip_f.write('my_model', compress_type=zipfile.ZIP_DEFLATED)
+    zip_f.close()
 
 @st.cache()
 def read_data(train_file,test_file):
@@ -159,35 +156,15 @@ else:
     y_valid = test[y_list]  
 
 st.subheader("⑥モデル構築")
-bagging_num = st.sidebar.number_input("バギングの数",value=3)
-
-if not bagging_num:
-    st.warning("バギングの数を入力してください")
-    st.stop()
-
-y_preds = pd.DataFrame()
-zip_f = zipfile.ZipFile('./model.zip','w')
-
 with st.spinner("Neural Networkのモデルを構築しています"):
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
-        for future in as_completed(futures):
-            y_pred = pd.DataFrame(future.result())
-            y_preds = pd.concat([y_preds,y_pred],axis=1)
-
-zip_f.close()
-y_preds.columns=range(bagging_num)
-st.dataframe(y_preds)
-
+    model = make_model(X_train, y_train,X_valid, y_valid)
 st.success("モデル構築完了")
-y_preds.columns=range(bagging_num)
-all = y_preds.mean(axis='columns')
-y_pred = pd.DataFrame(all.values)
 
 st.header("データ分析")
 with st.spinner("データ分析中"):
+    y_pred = model.predict(X_valid)
+    y_pred = pd.DataFrame(y_pred)
     y_pred.columns = ["pred"]
-    st.dataframe(y_pred)
     y_pred = y_pred.reset_index(drop=True)
     test = test.reset_index(drop=True)
     out = pd.concat([test,y_pred],axis=1)
@@ -238,7 +215,7 @@ with st.spinner("データ分析中"):
     st.subheader("月別回収率")
     st_pyecharts(month_payback_chart)
 
-    
+    zip_model(model)
 
     with open("./model.zip", "rb") as fp:
         btn = st.download_button(

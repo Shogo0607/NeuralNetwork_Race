@@ -6,23 +6,21 @@ import optuna.integration.lightgbm as lgb
 from streamlit_echarts import st_pyecharts
 from pyecharts.charts import Line,Bar
 from pyecharts import options as opts
-import pickle
-import io
-import re
+import zipfile
+import tempfile
+import os
+import tensorflow.keras.layers as layers
+from tensorflow import keras
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-st.set_page_config(page_title="LightGBM")
+st.set_page_config(page_title="Neural Network")
    
-@st.cache(allow_output_mutation=True)
-def pickle_model(model):
-    f = io.BytesIO()
-    pickle.dump(model, f)
-    return f
-
 @st.cache()
-def read_data(predict_file,model_file):
+def read_data(predict_file):
     predict_df = pd.read_csv(predict_file, encoding="shift-jis")
-    loaded_model = pickle.load(model_file)
-    return predict_df, loaded_model
+    return predict_df
 
 @st.cache()
 def read_feature(feature_file,vote):
@@ -34,6 +32,24 @@ def read_feature(feature_file,vote):
     y_list = feature_df[feature_df.iloc[:] == "○"].index
     x_list = feature_df[feature_df.iloc[:] == "●"].index
     return x_list,y_list
+
+def read_model(stream): 
+    model_list = list()
+    myzipfile = zipfile.ZipFile(stream)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        myzipfile.extractall(tmp_dir)
+        root_folder = myzipfile.namelist()
+        for folder in root_folder:
+            model_dir = os.path.join(tmp_dir, folder)
+            model = load_model(model_dir)
+            model_list.append(model)
+    return model_list
+
+
+def prediction(model,X_predict):
+    y_pred = model.predict(X_predict)
+    y_pred = pd.DataFrame(y_pred)
+    return y_pred
 
 def line_chart(x,y,y_name):
     b = (
@@ -65,8 +81,8 @@ def bar_chart(x,y,y_name):
         )
     return b
 # タイトル
-st.title("LightGBM")
-st.sidebar.title("LightGBM")
+st.title("Neural Network")
+st.sidebar.title("Neural Network")
 
 st.header("手順")
 # ファイル入力
@@ -79,12 +95,14 @@ if not predict_file:
 st.success("予測用CSVファイル入力完了")
 
 st.subheader("②学習済みモデル")
-model_file = st.sidebar.file_uploader("学習済みモデル(.pkl)を入力してください",type=["pkl"])
-
-if not model_file:
-    st.warning("学習済みモデル(.pkl)を入力してください")
+stream = st.sidebar.file_uploader('Model file (.zip)', type='zip')
+if stream is None:
+    st.warning("学習済みモデルを入力してください")
     st.stop()
-st.success("学習済みモデル(.pkl)入力完了")
+
+model_list = read_model(stream)
+
+st.success("学習済みモデル(.zip)入力完了")
 
 # 投票番号入力
 st.subheader("③投票番号")
@@ -92,11 +110,7 @@ vote = st.sidebar.selectbox("投票番号を選択してください",("","1,2",
 if not vote:
     st.warning("投票番号を選択してください")
     st.stop()
-# m = re.findall(r'\d+',model_file.name)
-# if m[0] == "1":
-#     vote = "1,2"
-# else:
-#     vote = str(m[0])
+
 st.success("投票番号"+vote+"を選択")
 
 # 投票番号入力
@@ -108,12 +122,12 @@ if not feature_file:
     st.stop()
 st.success("特徴量CSVファイル入力完了")
 x_list,y_list = read_feature(feature_file,vote)
-st.subheader("④データ読み込み")
+st.subheader("⑤データ読み込み")
 with st.spinner("データを読み込んでいます"):
-    predict_df, loaded_model = read_data(predict_file,model_file)
+    predict_df = read_data(predict_file)
 st.success("データ読み込み完了")
 
-st.subheader("⑤データ前処理")
+st.subheader("⑥データ前処理")
 with st.spinner("前処理を実施中"):
     predict_df = predict_df[predict_df["馬除外フラグ"] != 1]
 st.success("データ前処理完了")
@@ -129,8 +143,16 @@ else:
     y_predict = predict[y_list]
 
 st.header("データ分析")
+y_preds = pd.DataFrame()
 with st.spinner("データ分析中"):
-    y_pred = loaded_model.predict(X_predict)
+    for model in model_list:
+        y_pred = prediction(model,X_predict)
+        y_preds = pd.concat([y_preds,y_pred],axis=1)
+
+    y_preds.columns=range(len(model_list))
+    all = y_preds.mean(axis='columns')
+    y_pred = pd.DataFrame(all.values)
+    y_pred.columns = ["pred"]
     y_pred = pd.DataFrame(y_pred)
     y_pred.columns = ["pred"]
     y_pred = y_pred.reset_index(drop=True)

@@ -1,10 +1,11 @@
 pandas
 numpy==1.20.0
 streamlit
-optuna
 shap
 japanize_matplotlib
 lightgbm
 matplotlib
 pyecharts
 streamlit-echarts
+tensorflow
+scikit-learn
