@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PIL import Image
-import optuna.integration.lightgbm as lgb
 from streamlit_echarts import st_pyecharts
 from pyecharts.charts import Line,Bar
 from pyecharts import options as opts

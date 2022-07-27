@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PIL import Image
-import optuna.integration.lightgbm as lgb
 from streamlit_echarts import st_pyecharts
 from pyecharts.charts import Line,Bar
 from pyecharts import options as opts
@@ -20,7 +19,6 @@ import time
 st.set_page_config(page_title="Neural Network")
 
 def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
-    time.sleep(0.3)
     model = keras.Sequential([
         layers.Dense(25, activation='relu', input_shape=[len(X_train.columns)]),
         # layers.Dense(64, activation='relu'),
@@ -32,10 +30,10 @@ def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
     model.compile(loss='mse',
                     optimizer=optimizer,
                     metrics=['mae', 'mse'])
-    EPOCHS = 10
+    EPOCHS = 5
     model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=0)
     y_pred = model.predict(X_valid)
-    model_name = "model_"+str(n)
+    model_name = "model_"+str(n) + ".h5"
     model.save(model_name)
     zip_model(zip_f,model_name)
     return y_pred
@@ -166,18 +164,17 @@ if not bagging_num:
     st.stop()
 
 y_preds = pd.DataFrame()
-zip_f = zipfile.ZipFile('./model.zip','w')
-
+  
 with st.spinner("Neural Networkのモデルを構築しています"):
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
-        for future in as_completed(futures):
-            y_pred = pd.DataFrame(future.result())
-            y_preds = pd.concat([y_preds,y_pred],axis=1)
+        with zipfile.ZipFile('./model.zip','w') as zip_f:
+            futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
+            for future in as_completed(futures):
+                y_pred = pd.DataFrame(future.result())
+                y_preds = pd.concat([y_preds,y_pred],axis=1)
 
 zip_f.close()
 y_preds.columns=range(bagging_num)
-st.dataframe(y_preds)
 
 st.success("モデル構築完了")
 y_preds.columns=range(bagging_num)
@@ -187,7 +184,6 @@ y_pred = pd.DataFrame(all.values)
 st.header("データ分析")
 with st.spinner("データ分析中"):
     y_pred.columns = ["pred"]
-    st.dataframe(y_pred)
     y_pred = y_pred.reset_index(drop=True)
     test = test.reset_index(drop=True)
     out = pd.concat([test,y_pred],axis=1)
