@@ -32,6 +32,7 @@ def read_feature(feature_file,vote):
     x_list = feature_df[feature_df.iloc[:] == "●"].index
     return x_list,y_list
 
+@st.cache()
 def read_model(stream): 
     model_list = list()
     myzipfile = zipfile.ZipFile(stream)

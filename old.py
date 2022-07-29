@@ -26,12 +26,12 @@ def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
     ])
     
     optimizer = tf.keras.optimizers.RMSprop(0.001)
-    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=10)
+    
     model.compile(loss='mse',
                     optimizer=optimizer,
                     metrics=['mae', 'mse'])
-    EPOCHS = 100
-    model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=5,callbacks=[early_stopping])
+    EPOCHS = 5
+    model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=0)
     y_pred = model.predict(X_valid)
     model_name = "model_"+str(n) + ".h5"
     model.save(model_name)
@@ -49,15 +49,19 @@ def read_data(train_file,test_file):
     test_df = pd.read_csv(test_file, encoding="shift-jis")
     return train_df, test_df
 
-@st.cache()
-def read_feature(feature_file,vote):
+# @st.cache()
+def read_feature(feature_file):
+    x_list = pd.DataFrame()
+    y_list = pd.DataFrame()
     feature_df = pd.read_csv(feature_file, encoding="utf-8-sig",index_col=0)
-    if vote == "1,2":
-        feature_df = feature_df["1"].dropna()
-    else:
-        feature_df = feature_df[vote].dropna()
-    y_list = feature_df[feature_df.iloc[:] == "○"].index
-    x_list = feature_df[feature_df.iloc[:] == "●"].index
+    for i in range(len(feature_df.columns)):
+        feature = feature_df.iloc[:,i].dropna().astype(int)
+        _y = pd.DataFrame(feature[feature.iloc[:] == 2].index)
+        _x = pd.DataFrame(feature[feature.iloc[:] == 1].index)
+        _y.columns = [str(i)]
+        _x.columns = [str(i)]
+        y_list = pd.concat([y_list,_y],axis=1)
+        x_list = pd.concat([x_list,_x],axis=1)
     return x_list,y_list
     
 def line_chart(x,y,y_name):
@@ -111,14 +115,14 @@ if not test_file:
     st.stop()
 st.success("テスト用CSVファイル入力完了")
 
-# 投票番号入力
-st.subheader("③投票番号")
-vote = st.sidebar.selectbox("投票番号を選択してください",("","1,2","3","4","5","6","7","8","9","10","11"))
-if vote == "":
-    st.warning("投票番号を入力してください")
-    st.stop()
+# # 投票番号入力
+# st.subheader("③投票番号")
+# vote = st.sidebar.selectbox("投票番号を選択してください",("","1,2","3","4","5","6","7","8","9","10","11"))
+# if vote == "":
+#     st.warning("投票番号を入力してください")
+#     st.stop()
     
-st.success(str(vote)+"を選択")
+# st.success(str(vote)+"を選択")
 # 特徴量入力
 st.subheader("④特徴量CSVデータ")
 feature_file = st.sidebar.file_uploader("特徴量のCSVファイルを入力してください",type=["csv"])
@@ -127,8 +131,9 @@ if not feature_file:
     st.warning("特徴量のCSVファイルを入力してください")
     st.stop()
 st.success("特徴量CSVファイル入力完了")
-x_list,y_list = read_feature(feature_file,vote)
-
+x_list,y_list = read_feature(feature_file)
+st.dataframe(x_list)
+st.stop()
 st.subheader("⑤データ読み込み")
 with st.spinner("データを読み込んでいます"):
     train_df, test_df = read_data(train_file,test_file)
