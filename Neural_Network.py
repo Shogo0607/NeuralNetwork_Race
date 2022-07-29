@@ -166,7 +166,7 @@ if not bagging_num:
 y_preds = pd.DataFrame()
   
 with st.spinner("Neural Networkのモデルを構築しています"):
-    with ThreadPoolExecutor(max_workers=100) as executor:
+    with ThreadPoolExecutor(max_workers=50) as executor:
         with zipfile.ZipFile('./model.zip','w') as zip_f:
             futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
             for future in as_completed(futures):
