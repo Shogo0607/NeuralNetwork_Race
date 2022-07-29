@@ -7,5 +7,5 @@ lightgbm
 matplotlib
 pyecharts
 streamlit-echarts
-tensorflow
+tensorflow-gpu
 scikit-learn
