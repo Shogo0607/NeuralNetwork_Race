@@ -157,7 +157,7 @@ else:
     y_valid = test[y_list]  
 
 st.subheader("⑥モデル構築")
-bagging_num = st.sidebar.number_input("バギングの数",value=3)
+bagging_num = st.sidebar.number_input("バギングの数",value=200)
 
 if not bagging_num:
     st.warning("バギングの数を入力してください")
