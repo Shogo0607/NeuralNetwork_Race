@@ -9,3 +9,4 @@ pyecharts
 streamlit-echarts
 tensorflow-gpu
 scikit-learn
+ray
