@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PIL import Image
-import optuna.integration.lightgbm as lgb
 from streamlit_echarts import st_pyecharts
 from pyecharts.charts import Line,Bar
 from pyecharts import options as opts
@@ -14,33 +13,35 @@ from tensorflow.keras.models import load_model
 import zipfile
 import tempfile
 import os
-
-
+from sklearn.utils import resample
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 st.set_page_config(page_title="Neural Network")
 
-def make_model(X_train, y_train,X_valid, y_valid):
-    # keras.initializers.Initializer()
+def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
     model = keras.Sequential([
-        layers.Dense(64, activation='relu', input_shape=[len(X_train.columns)]),
-        layers.Dense(64, activation='relu'),
+        layers.Dense(25, activation='relu', input_shape=[len(X_train.columns)]),
+        # layers.Dense(64, activation='relu'),
         layers.Dense(1)
     ])
     
     optimizer = tf.keras.optimizers.RMSprop(0.001)
-    
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=10)
     model.compile(loss='mse',
                     optimizer=optimizer,
                     metrics=['mae', 'mse'])
-    EPOCHS = 10
-    model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=0)
-    return model
+    EPOCHS = 100
+    model.fit(X_train, y_train, validation_data=(X_valid,y_valid),epochs=EPOCHS,verbose=5,callbacks=[early_stopping])
+    y_pred = model.predict(X_valid)
+    model_name = "model_"+str(n) + ".h5"
+    model.save(model_name)
+    zip_model(zip_f,model_name)
+    return y_pred
     
-def zip_model(model):
-    model.save("my_model")
-    zip_f = zipfile.ZipFile('./model.zip','w')
+def zip_model(zip_f,model_name):
     # ZIPファイルに追加
-    zip_f.write('my_model', compress_type=zipfile.ZIP_DEFLATED)
-    zip_f.close()
+    zip_f.write(model_name, compress_type=zipfile.ZIP_DEFLATED)
+    
 
 @st.cache()
 def read_data(train_file,test_file):
@@ -156,14 +157,32 @@ else:
     y_valid = test[y_list]  
 
 st.subheader("⑥モデル構築")
+bagging_num = st.sidebar.number_input("バギングの数",value=200)
+
+if not bagging_num:
+    st.warning("バギングの数を入力してください")
+    st.stop()
+
+y_preds = pd.DataFrame()
+  
 with st.spinner("Neural Networkのモデルを構築しています"):
-    model = make_model(X_train, y_train,X_valid, y_valid)
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        with zipfile.ZipFile('./model.zip','w') as zip_f:
+            futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
+            for future in as_completed(futures):
+                y_pred = pd.DataFrame(future.result())
+                y_preds = pd.concat([y_preds,y_pred],axis=1)
+
+zip_f.close()
+y_preds.columns=range(bagging_num)
+
 st.success("モデル構築完了")
+y_preds.columns=range(bagging_num)
+all = y_preds.mean(axis='columns')
+y_pred = pd.DataFrame(all.values)
 
 st.header("データ分析")
 with st.spinner("データ分析中"):
-    y_pred = model.predict(X_valid)
-    y_pred = pd.DataFrame(y_pred)
     y_pred.columns = ["pred"]
     y_pred = y_pred.reset_index(drop=True)
     test = test.reset_index(drop=True)
@@ -215,7 +234,7 @@ with st.spinner("データ分析中"):
     st.subheader("月別回収率")
     st_pyecharts(month_payback_chart)
 
-    zip_model(model)
+    
 
     with open("./model.zip", "rb") as fp:
         btn = st.download_button(

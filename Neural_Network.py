@@ -5,7 +5,7 @@ from PIL import Image
 from streamlit_echarts import st_pyecharts
 from pyecharts.charts import Line,Bar
 from pyecharts import options as opts
-
+import ray
 import tensorflow.keras.layers as layers
 from tensorflow import keras
 import tensorflow as tf
@@ -18,7 +18,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 st.set_page_config(page_title="Neural Network")
 
-def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
+@ray.remote
+def make_model(X_train, y_train,X_valid, y_valid,n):
     model = keras.Sequential([
         layers.Dense(25, activation='relu', input_shape=[len(X_train.columns)]),
         # layers.Dense(64, activation='relu'),
@@ -35,7 +36,6 @@ def make_model(X_train, y_train,X_valid, y_valid,zip_f,n):
     y_pred = model.predict(X_valid)
     model_name = "model_"+str(n) + ".h5"
     model.save(model_name)
-    zip_model(zip_f,model_name)
     return y_pred
     
 def zip_model(zip_f,model_name):
@@ -92,7 +92,7 @@ def bar_chart(x,y,y_name):
 # タイトル
 st.title("Neural Network")
 st.sidebar.title("Neural Network")
-
+ray.init(ignore_reinit_error=True)
 st.header("手順")
 # ファイル入力
 st.subheader("①学習用CSVファイル")
@@ -157,7 +157,7 @@ else:
     y_valid = test[y_list]  
 
 st.subheader("⑥モデル構築")
-bagging_num = st.sidebar.number_input("バギングの数",value=200)
+bagging_num = st.sidebar.number_input("バギングの数",value=3)
 
 if not bagging_num:
     st.warning("バギングの数を入力してください")
@@ -166,13 +166,11 @@ if not bagging_num:
 y_preds = pd.DataFrame()
   
 with st.spinner("Neural Networkのモデルを構築しています"):
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        with zipfile.ZipFile('./model.zip','w') as zip_f:
-            futures = [executor.submit(make_model,X_train, y_train,X_valid, y_valid,zip_f,n) for n in range(bagging_num)]
-            for future in as_completed(futures):
-                y_pred = pd.DataFrame(future.result())
-                y_preds = pd.concat([y_preds,y_pred],axis=1)
-
+    zip_f = zipfile.ZipFile('./model.zip','w')
+    futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n) for n in range(bagging_num)]
+for future in futures:
+    y_pred = pd.DataFrame(ray.get(future))
+    y_preds = pd.concat([y_preds,y_pred],axis=1)
 zip_f.close()
 y_preds.columns=range(bagging_num)
 
@@ -234,7 +232,14 @@ with st.spinner("データ分析中"):
     st.subheader("月別回収率")
     st_pyecharts(month_payback_chart)
 
-    
+    import glob
+
+    h5files = glob.glob("./*h5")
+    zip_f = zipfile.ZipFile('./model.zip', 'w', zipfile.ZIP_STORED)
+    for file in h5files:
+        zip_f.write(file)
+    zip_f.close()
+
 
     with open("./model.zip", "rb") as fp:
         btn = st.download_button(
