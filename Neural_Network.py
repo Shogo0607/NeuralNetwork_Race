@@ -157,7 +157,7 @@ else:
     y_valid = test[y_list]  
 
 st.subheader("⑥モデル構築")
-bagging_num = st.sidebar.number_input("バギングの数",value=200)
+bagging_num = st.sidebar.number_input("バギングの数",value=10)
 
 if not bagging_num:
     st.warning("バギングの数を入力してください")
@@ -166,12 +166,12 @@ if not bagging_num:
 y_preds = pd.DataFrame()
   
 with st.spinner("Neural Networkのモデルを構築しています"):
+    ray.shutdown()
     ray.init(ignore_reinit_error=True)
     futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n) for n in range(bagging_num)]
-for future in futures:
-    y_pred = pd.DataFrame(ray.get(future))
-    y_preds = pd.concat([y_preds,y_pred],axis=1)
-y_preds.columns=range(bagging_num)
+    for future in futures:
+        y_pred = pd.DataFrame(ray.get(future))
+        y_preds = pd.concat([y_preds,y_pred],axis=1)
 
 st.success("モデル構築完了")
 y_preds.columns=range(bagging_num)
