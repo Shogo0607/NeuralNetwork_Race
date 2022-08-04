@@ -166,12 +166,10 @@ if not bagging_num:
 y_preds = pd.DataFrame()
   
 with st.spinner("Neural Networkのモデルを構築しています"):
-    zip_f = zipfile.ZipFile('./model.zip','w')
     futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n) for n in range(bagging_num)]
 for future in futures:
     y_pred = pd.DataFrame(ray.get(future))
     y_preds = pd.concat([y_preds,y_pred],axis=1)
-zip_f.close()
 y_preds.columns=range(bagging_num)
 
 st.success("モデル構築完了")
