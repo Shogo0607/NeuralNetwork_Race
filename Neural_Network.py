@@ -92,7 +92,7 @@ def bar_chart(x,y,y_name):
 # タイトル
 st.title("Neural Network")
 st.sidebar.title("Neural Network")
-ray.init(ignore_reinit_error=True)
+
 st.header("手順")
 # ファイル入力
 st.subheader("①学習用CSVファイル")
@@ -166,6 +166,7 @@ if not bagging_num:
 y_preds = pd.DataFrame()
   
 with st.spinner("Neural Networkのモデルを構築しています"):
+    ray.init(ignore_reinit_error=True)
     futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n) for n in range(bagging_num)]
 for future in futures:
     y_pred = pd.DataFrame(ray.get(future))
