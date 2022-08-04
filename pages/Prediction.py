@@ -21,18 +21,27 @@ def read_data(predict_file):
     predict_df = pd.read_csv(predict_file, encoding="shift-jis")
     return predict_df
 
-@st.cache()
-def read_feature(feature_file,vote):
+def read_feature(feature_file,model_number):
     feature_df = pd.read_csv(feature_file, encoding="utf-8-sig",index_col=0)
-    if vote == "1,2":
+
+    if model_number == "model1":
         feature_df = feature_df["1"].dropna()
-    else:
-        feature_df = feature_df[vote].dropna()
-    y_list = feature_df[feature_df.iloc[:] == "○"].index
-    x_list = feature_df[feature_df.iloc[:] == "●"].index
+    elif model_number == "model2":
+        feature_df = feature_df["3"].dropna()
+    elif model_number == "model3":
+        feature_df = feature_df["4"].dropna()
+    elif model_number == "model4":
+        feature_df = feature_df["5"].dropna()
+    elif model_number == "model5":
+        feature_df = feature_df["7"].dropna()
+    elif model_number == "model6":
+        feature_df = feature_df["13"].dropna()
+    feature = feature_df.astype(int)
+    y_list = feature[feature.iloc[:] == 2].index
+    x_list = feature[feature.iloc[:] == 1].index
     return x_list,y_list
 
-@st.cache()
+@st.cache(allow_output_mutation=True)
 def read_model(stream): 
     model_list = list()
     myzipfile = zipfile.ZipFile(stream)
@@ -105,13 +114,12 @@ model_list = read_model(stream)
 st.success("学習済みモデル(.zip)入力完了")
 
 # 投票番号入力
-st.subheader("③投票番号")
-vote = st.sidebar.selectbox("投票番号を選択してください",("","1,2","3","4","5","6","7","8","9","10","11"))
-if not vote:
-    st.warning("投票番号を選択してください")
+st.subheader("③モデル番号")
+model_number = st.sidebar.selectbox("モデル番号を選択してください",("","model1","model2","model3","model4","model5","model6"))
+if model_number == "":
+    st.warning("モデル番号を入力してください")
     st.stop()
-
-st.success("投票番号"+vote+"を選択")
+st.success(str(model_number)+"を選択")
 
 # 投票番号入力
 st.subheader("④特徴量CSVデータ")
@@ -121,7 +129,7 @@ if not feature_file:
     st.warning("特徴量のCSVファイルを入力してください")
     st.stop()
 st.success("特徴量CSVファイル入力完了")
-x_list,y_list = read_feature(feature_file,vote)
+x_list,y_list = read_feature(feature_file,model_number)
 st.subheader("⑤データ読み込み")
 with st.spinner("データを読み込んでいます"):
     predict_df = read_data(predict_file)
@@ -132,15 +140,30 @@ with st.spinner("前処理を実施中"):
     predict_df = predict_df[predict_df["馬除外フラグ"] != 1]
 st.success("データ前処理完了")
 
-if vote == "1,2":
+if model_number == "model1":
     predict = predict_df[(predict_df["投票"]==1)|(predict_df["投票"]==2)]
     X_predict = predict[x_list]
     y_predict = predict[y_list]
 
-else:
-    predict = predict_df[(predict_df["投票"]==int(vote))]
-    X_predict = predict[x_list]
-    y_predict = predict[y_list]
+elif model_number == "model2":
+    train = predict_df[(predict_df["投票"]==3)]
+    X_predict = predict_df[x_list]
+    y_predict = predict_df[y_list]
+
+elif model_number == "model3":
+    train = predict_df[(predict_df["投票"]==4)]
+    X_predict = predict_df[x_list]
+    y_predict = predict_df[y_list]
+
+elif model_number == "model4":
+    train = predict_df[(predict_df["投票"]==5)|(predict_df["投票"]==6)|(predict_df["投票"]==9)|(predict_df["投票"]==11)]
+    X_predict = predict_df[x_list]
+    y_predict = predict_df[y_list]
+
+elif model_number == "model6":
+    train = predict_df[(predict_df["投票"]==13)]
+    X_predict = predict_df[x_list]
+    y_predict = predict_df[y_list]
 
 st.header("データ分析")
 y_preds = pd.DataFrame()

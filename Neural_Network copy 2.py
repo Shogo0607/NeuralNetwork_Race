@@ -19,9 +19,9 @@ import time
 st.set_page_config(page_title="Neural Network")
 
 @ray.remote
-def make_model(X_train, y_train,X_valid, y_valid,n,unit_default):
+def make_model(X_train, y_train,X_valid, y_valid,n):
     model = keras.Sequential([
-        layers.Dense(unit_default, activation='relu', input_shape=[len(X_train.columns)]),
+        layers.Dense(25, activation='relu', input_shape=[len(X_train.columns)]),
         # layers.Dense(64, activation='relu'),
         layers.Dense(1)
     ])
@@ -49,24 +49,30 @@ def read_data(train_file,test_file):
     test_df = pd.read_csv(test_file, encoding="shift-jis")
     return train_df, test_df
 
-def read_feature(feature_file,model_number):
+@st.cache()
+def read_feature(feature_file,vote):
     feature_df = pd.read_csv(feature_file, encoding="utf-8-sig",index_col=0)
-
-    if model_number == "model1":
+    if vote == "1,2":
         feature_df = feature_df["1"].dropna()
-    elif model_number == "model2":
-        feature_df = feature_df["3"].dropna()
-    elif model_number == "model3":
-        feature_df = feature_df["4"].dropna()
-    elif model_number == "model4":
-        feature_df = feature_df["5"].dropna()
-    elif model_number == "model5":
-        feature_df = feature_df["7"].dropna()
-    elif model_number == "model6":
-        feature_df = feature_df["13"].dropna()
-    feature = feature_df.astype(int)
-    y_list = feature[feature.iloc[:] == 2].index
-    x_list = feature[feature.iloc[:] == 1].index
+    else:
+        feature_df = feature_df[vote].dropna()
+    y_list = feature_df[feature_df.iloc[:] == "○"].index
+    x_list = feature_df[feature_df.iloc[:] == "●"].index
+    return x_list,y_list
+
+# @st.cache()
+def read_feature(feature_file,model_number):
+    x_list = pd.DataFrame()
+    y_list = pd.DataFrame()
+    feature_df = pd.read_csv(feature_file, encoding="utf-8-sig",index_col=0)
+    for i in range(len(feature_df.columns)):
+        feature = feature_df.iloc[:,i].dropna().astype(int)
+        _y = pd.DataFrame(feature[feature.iloc[:] == 2].index)
+        _x = pd.DataFrame(feature[feature.iloc[:] == 1].index)
+        _y.columns = [str(i)]
+        _x.columns = [str(i)]
+        y_list = pd.concat([y_list,_y],axis=1)
+        x_list = pd.concat([x_list,_x],axis=1)
     return x_list,y_list
     
 def line_chart(x,y,y_name):
@@ -122,12 +128,12 @@ st.success("テスト用CSVファイル入力完了")
 
 # 投票番号入力
 st.subheader("③モデル番号")
-model_number = st.sidebar.selectbox("モデル番号を選択してください",("","model1","model2","model3","model4","model5","model6"))
-if model_number == "":
-    st.warning("モデル番号を入力してください")
+vote = st.sidebar.selectbox("投票番号を選択してください",("","1,2","3","4","5","6","7","8","9","10","11"))
+if vote == "":
+    st.warning("投票番号を入力してください")
     st.stop()
     
-st.success(str(model_number)+"を選択")
+st.success(str(vote)+"を選択")
 # 特徴量入力
 st.subheader("④特徴量CSVデータ")
 feature_file = st.sidebar.file_uploader("特徴量のCSVファイルを入力してください",type=["csv"])
@@ -136,7 +142,7 @@ if not feature_file:
     st.warning("特徴量のCSVファイルを入力してください")
     st.stop()
 st.success("特徴量CSVファイル入力完了")
-x_list,y_list = read_feature(feature_file,model_number)
+x_list,y_list = read_feature(feature_file,vote)
 
 st.subheader("⑤データ読み込み")
 with st.spinner("データを読み込んでいます"):
@@ -147,64 +153,26 @@ st.subheader("⑥データ前処理")
 with st.spinner("前処理を実施中"):
     train_df = train_df[train_df["馬除外フラグ"] != 1]
     test_df = test_df[test_df["馬除外フラグ"] != 1]
-
-    if model_number == "model1":
-        train = train_df[(train_df["投票"]==1)|(train_df["投票"]==2)]
-        test  = test_df[(test_df["投票"]==1)|(test_df["投票"]==2)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 25
-
-    elif model_number == "model2":
-        train = train_df[(train_df["投票"]==3)]
-        test  = test_df[(test_df["投票"]==3)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 45
-
-    elif model_number == "model3":
-        train = train_df[(train_df["投票"]==4)]
-        test  = test_df[(test_df["投票"]==4)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 50
-
-    elif model_number == "model4":
-        train = train_df[(train_df["投票"]==5)|(train_df["投票"]==6)|(train_df["投票"]==9)|(train_df["投票"]==11)]
-        test  = test_df[(train_df["投票"]==5)|(train_df["投票"]==6)|(train_df["投票"]==9)|(train_df["投票"]==11)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 50
-
-    elif model_number == "model5":
-        train = train_df[(train_df["投票"]==7)|(train_df["投票"]==8)|(train_df["投票"]==10)|(train_df["投票"]==12)]
-        test  = test_df[(train_df["投票"]==7)|(train_df["投票"]==8)|(train_df["投票"]==10)|(train_df["投票"]==12)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 50
-
-    elif model_number == "model6":
-        train = train_df[(train_df["投票"]==13)]
-        test  = test_df[(test_df["投票"]==13)]
-        X_train = train[x_list]
-        y_train = train[y_list]
-        X_valid = test[x_list]
-        y_valid = test[y_list]
-        unit_default = 15
-
 st.success("データ前処理完了")
 
-bagging_num = st.sidebar.number_input("バギングの数",value=200)
+if vote == "1,2":
+    train = train_df[(train_df["投票"]==1)|(train_df["投票"]==2)]
+    test  = test_df[(test_df["投票"]==1)|(test_df["投票"]==2)]
+    X_train = train[x_list]
+    y_train = train[y_list]
+    X_valid = test[x_list]
+    y_valid = test[y_list]
+
+else:
+    train = train_df[(train_df["投票"]==int(vote))]
+    test  = test_df[(test_df["投票"]==int(vote))]
+    X_train = train[x_list]
+    y_train = train[y_list]
+    X_valid = test[x_list]
+    y_valid = test[y_list]  
+
+st.stop()
+bagging_num = st.sidebar.number_input("バギングの数",value=10)
 
 if not bagging_num:
     st.warning("バギングの数を入力してください")
@@ -216,13 +184,12 @@ if st.sidebar.button("モデル構築開始"):
     with st.spinner("Neural Networkのモデルを構築しています"):
         ray.shutdown()
         ray.init(ignore_reinit_error=True)
-        futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n,unit_default) for n in range(bagging_num)]
+        futures = [make_model.remote(X_train, y_train,X_valid, y_valid,n) for n in range(bagging_num)]
         for future in futures:
             y_pred = pd.DataFrame(ray.get(future))
             y_preds = pd.concat([y_preds,y_pred],axis=1)
 
     st.success("モデル構築完了")
-    ray.shutdown()
     y_preds.columns=range(bagging_num)
     all = y_preds.mean(axis='columns')
     y_pred = pd.DataFrame(all.values)
@@ -281,16 +248,17 @@ if st.sidebar.button("モデル構築開始"):
         st_pyecharts(month_payback_chart)
 
         import glob
-        zipname = model_number + '.zip'
+
         h5files = glob.glob("./*h5")
-        zip_f = zipfile.ZipFile('./' + zipname, 'w', zipfile.ZIP_STORED)
+        zip_f = zipfile.ZipFile('./model.zip', 'w', zipfile.ZIP_STORED)
         for file in h5files:
             zip_f.write(file)
         zip_f.close()
+        ray.shutdown()
 
-        with open('./' + zipname, "rb") as fp:
+        with open("./model.zip", "rb") as fp:
             btn = st.download_button(
                 label="Download model",
                 data=fp,
-                file_name=zipname,
+                file_name="model.zip",
                 mime="application/zip")
